@@ -529,20 +529,42 @@ class _FuelScreenState extends State<FuelScreen>
                     ),
 
                     const SizedBox(height: 0),
-                    Image.asset("assets/images/gazol_logo.png", height: 80),
-                    const Text("Fuel Trip Calculator",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white60)),
-                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Logo
+                        Image.asset(
+                          "assets/images/gazol_logo.png",
+                          height: 55,
+                        ),
 
-                    Text(
-                      "📍 $locationText",
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFFFA866),
-                      ),
+                        const SizedBox(width: 10),
+
+                        // Texts
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Fuel Trip Calculator",
+                                style: TextStyle(
+                                  color: Colors.white60,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                "📍 $locationText",
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFFFA866),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
 
                     const SizedBox(height: 10),
