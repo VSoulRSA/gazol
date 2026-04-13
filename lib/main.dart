@@ -528,8 +528,8 @@ class _FuelScreenState extends State<FuelScreen>
                       ),
                     ),
 
-                    const SizedBox(height: 6),
-                    Image.asset("assets/images/gazol_logo.png", height: 80),
+                    const SizedBox(height: 0),
+                    Image.asset("assets/images/gazol_logo.png", height: 50),
                     const Text("Fuel Trip Calculator",
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white60)),
@@ -577,7 +577,7 @@ class _FuelScreenState extends State<FuelScreen>
                     // <<< MOVED: Show on Map button is now directly under the destination field >>>
                     if (currentLat != null && currentLng != null)
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 40),
+                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 20),
                         child: ElevatedButton.icon(
                           onPressed: _openMap,
                           icon: const Icon(Icons.map, color: Colors.black),
@@ -585,7 +585,7 @@ class _FuelScreenState extends State<FuelScreen>
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFFF8C32),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
                           ),
                         ),
                       ),
