@@ -108,7 +108,7 @@ class GazolWallpaper extends CustomPainter {
 }
 
 
-// ✅ ✅ ✅  FuelScreen CODE — UPDATED WITH MAP BUTTON POSITION + BIGGER RESULTS ✅ ✅ ✅
+// FuelScreen CODE —
 
 class FuelScreen extends StatefulWidget {
   @override
@@ -221,7 +221,7 @@ class _FuelScreenState extends State<FuelScreen>
     }
   }
 
-  // ✅ LOCATION (now stores coordinates)
+  // LOCATION (stores coordinates)
   Future<void> getLocation() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       setState(() => locationText = "GPS Off");
@@ -529,7 +529,7 @@ class _FuelScreenState extends State<FuelScreen>
                     ),
 
                     const SizedBox(height: 0),
-                    Image.asset("assets/images/gazol_logo.png", height: 50),
+                    Image.asset("assets/images/gazol_logo.png", height: 80),
                     const Text("Fuel Trip Calculator",
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white60)),
@@ -539,13 +539,13 @@ class _FuelScreenState extends State<FuelScreen>
                       "📍 $locationText",
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFFFFA866),
                       ),
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
                     // Destination row (Destination field + Get button)
                     Row(
@@ -563,9 +563,9 @@ class _FuelScreenState extends State<FuelScreen>
                           onPressed: fetchDistance,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFFF8C32),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14)),
+                                borderRadius: BorderRadius.circular(13)),
                           ),
                           child: const Text("Get", style: TextStyle(color: Colors.black)),
                         ),
@@ -628,17 +628,27 @@ class _FuelScreenState extends State<FuelScreen>
                     ),
 
                     const SizedBox(height: 10),
-                    TextField(
-                        controller: distanceCtrl,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: boxInput("Distance (km)")),
-                    const SizedBox(height: 8),
-                    TextField(
-                        controller: fuelCtrl,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: boxInput("Fuel Consumption (L/100km)")),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: distanceCtrl,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: boxInput("Distance (km)"),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: fuelCtrl,
+                            keyboardType: TextInputType.number,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: boxInput("Fuel (L/100km)"),
+                          ),
+                        ),
+                      ],
+                    ),
 
                     const SizedBox(height: 14),
                     const Text("Fuel Type:", style: TextStyle(color: Colors.white70)),
