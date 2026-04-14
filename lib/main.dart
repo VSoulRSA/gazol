@@ -535,7 +535,7 @@ class _FuelScreenState extends State<FuelScreen>
                         // Logo
                         Image.asset(
                           "assets/images/gazol_logo.png",
-                          height: 55,
+                          height: 70,
                         ),
 
                         const SizedBox(width: 10),
@@ -717,7 +717,7 @@ class _FuelScreenState extends State<FuelScreen>
                             decoration: BoxDecoration(
                               color: const Color(0xFF1E1E1E),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF2A2A2A)),
+                              border: Border.all(color: const Color(0xFF1B1B1B)),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.center,
@@ -727,7 +727,7 @@ class _FuelScreenState extends State<FuelScreen>
                                   "Trip Estimate",
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    fontSize: 20,
+                                    fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -736,21 +736,21 @@ class _FuelScreenState extends State<FuelScreen>
                                   "${litres!.toStringAsFixed(2)} L",
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                      fontSize: 18, fontWeight: FontWeight.bold),
+                                      fontSize: 12, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
                                   "One-way: R${oneWay!.toStringAsFixed(2)}",
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                      fontSize: 18, fontWeight: FontWeight.bold),
+                                      fontSize: 12, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
                                   "Return: R${returnCost!.toStringAsFixed(2)}",
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                      fontSize: 18, fontWeight: FontWeight.bold),
+                                      fontSize: 20, fontWeight: FontWeight.bold),
                                 ),
                               ],
                             ),
