@@ -582,6 +582,7 @@ class _FuelScreenState extends State<FuelScreen>
 
                     // Destination row (Destination field + Get button)
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: TextField(
@@ -591,37 +592,55 @@ class _FuelScreenState extends State<FuelScreen>
                             decoration: boxInput("Destination"),
                           ),
                         ),
+
                         const SizedBox(width: 6),
-                        ElevatedButton(
-                          onPressed: fetchDistance,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFF8C32),
-                            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(13)),
-                          ),
-                          child: const Text("Get", style: TextStyle(color: Colors.black)),
+
+                        Column(
+                          children: [
+                            ElevatedButton(
+                              onPressed: fetchDistance,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFF8C32),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 13,
+                                  vertical: 10,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(13),
+                                ),
+                              ),
+                              child: const Text(
+                                "Get",
+                                style: TextStyle(color: Colors.black),
+                              ),
+                            ),
+
+                            const SizedBox(height: 6),
+
+                            if (currentLat != null && currentLng != null)
+                              SizedBox(
+                                width: 48,
+                                height: 40,
+                                child: ElevatedButton(
+                                  onPressed: _openMap,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF1E1E1E),
+                                    padding: EdgeInsets.zero,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.map,
+                                    color: Color(0xFFFF8C32),
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ],
                     ),
-
-                    const SizedBox(height: 8),
-
-                    // <<< MOVED: Show on Map button is now directly under the destination field >>>
-                    if (currentLat != null && currentLng != null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 20),
-                        child: ElevatedButton.icon(
-                          onPressed: _openMap,
-                          icon: const Icon(Icons.map, color: Colors.black),
-                          label: const Text("Show on Map", style: TextStyle(color: Colors.black)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFF8C32),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                          ),
-                        ),
-                      ),
 
                     const SizedBox(height: 10),
                     const Text("Select Car:", style: TextStyle(color: Colors.white70)),
