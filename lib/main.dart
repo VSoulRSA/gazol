@@ -736,15 +736,6 @@ class _FuelScreenState extends State<FuelScreen>
                               crossAxisAlignment: CrossAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text(
-                                  "Trip Estimate",
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
               Column(
                 children: [
                   const Text(
