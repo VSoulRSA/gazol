@@ -589,55 +589,38 @@ class _FuelScreenState extends State<FuelScreen>
                             controller: destinationCtrl,
                             keyboardType: TextInputType.text,
                             style: const TextStyle(color: Colors.white),
-                            decoration: boxInput("Destination"),
+                            decoration: boxInput("Destination").copyWith(
+                              suffixIcon: currentLat != null && currentLng != null
+                                  ? IconButton(
+                                onPressed: _openMap,
+                                icon: const Icon(
+                                  Icons.map,
+                                  color: Color(0xFFFF8C32),
+                                ),
+                              )
+                                  : null,
+                            ),
                           ),
                         ),
 
                         const SizedBox(width: 6),
 
-                        Column(
-                          children: [
-                            ElevatedButton(
-                              onPressed: fetchDistance,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFFF8C32),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 13,
-                                  vertical: 10,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(13),
-                                ),
-                              ),
-                              child: const Text(
-                                "Get",
-                                style: TextStyle(color: Colors.black),
-                              ),
+                        ElevatedButton(
+                          onPressed: fetchDistance,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFF8C32),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 13,
+                              vertical: 10,
                             ),
-
-                            const SizedBox(height: 6),
-
-                            if (currentLat != null && currentLng != null)
-                              SizedBox(
-                                width: 48,
-                                height: 40,
-                                child: ElevatedButton(
-                                  onPressed: _openMap,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF1E1E1E),
-                                    padding: EdgeInsets.zero,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.map,
-                                    color: Color(0xFFFF8C32),
-                                    size: 20,
-                                  ),
-                                ),
-                              ),
-                          ],
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                          ),
+                          child: const Text(
+                            "Get",
+                            style: TextStyle(color: Colors.black),
+                          ),
                         ),
                       ],
                     ),
