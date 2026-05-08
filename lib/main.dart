@@ -745,12 +745,28 @@ class _FuelScreenState extends State<FuelScreen>
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                Text(
-                                  "${litres!.toStringAsFixed(2)} L",
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                      fontSize: 16, fontWeight: FontWeight.bold),
-                                ),
+              Column(
+                children: [
+                  const Text(
+                    "Estimated Fuel Usage",
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white60,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Text(
+                    "${litres!.toStringAsFixed(2)} L",
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
                                 const SizedBox(height: 6),
                                 Text(
                                   "One-way: R${oneWay!.toStringAsFixed(2)}",
