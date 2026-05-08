@@ -762,25 +762,36 @@ class _FuelScreenState extends State<FuelScreen>
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
                                       fontSize: 22, fontWeight: FontWeight.bold),
+                                ),const SizedBox(height: 14),
+
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: ElevatedButton.icon(
+                                    onPressed: startTrip,
+                                    icon: const Icon(Icons.navigation, color: Colors.black, size: 18),
+                                    label: const Text(
+                                      "Start Trip",
+                                      style: TextStyle(
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFFF8C32),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 10),
 
-                          ElevatedButton(
-                            onPressed: startTrip,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFF8C32),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14)),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                            child: const Text("START TRIP",
-                                style: TextStyle(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.bold)),
-                          ),
                         ],
                       ),
 
