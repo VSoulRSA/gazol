@@ -343,9 +343,9 @@ class _FuelScreenState extends State<FuelScreen>
 
   // ✅ CALC
   void calculate() {
-    final d = double.tryParse(distanceCtrl.text);
-    final f = double.tryParse(fuelCtrl.text);
-    final p = double.tryParse(priceCtrl.text);
+    final d = double.tryParse(distanceCtrl.text.replaceAll(',', '.'),);
+    final f = double.tryParse(fuelCtrl.text.replaceAll(',', '.'),);
+    final p = double.tryParse(priceCtrl.text.replaceAll(',', '.'),);
 
     if (d == null || d <= 0) {
       ScaffoldMessenger.of(context)

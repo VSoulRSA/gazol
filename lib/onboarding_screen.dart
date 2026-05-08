@@ -126,9 +126,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   Future<void> _saveFuelPrices() async {
-    final p95 = double.tryParse(p95Ctrl.text);
-    final p93 = double.tryParse(p93Ctrl.text);
-    final d50 = double.tryParse(d50Ctrl.text);
+    final p95 = double.tryParse(p95Ctrl.text.replaceAll(',', '.'),);
+    final p93 = double.tryParse(p93Ctrl.text.replaceAll(',', '.'),);
+    final d50 = double.tryParse(d50Ctrl.text.replaceAll(',', '.'),);
     if (p95 == null || p95 <= 0) return _toast("Enter a valid price for 95");
     if (p93 == null || p93 <= 0) return _toast("Enter a valid price for 93");
     if (d50 == null || d50 <= 0) {
@@ -143,7 +143,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Future<void> _saveFirstCar() async {
     final name = carNameCtrl.text.trim();
-    final cons = double.tryParse(carConsCtrl.text);
+    final cons = double.tryParse(carConsCtrl.text.replaceAll(',', '.'),);
     if (name.isEmpty) return _toast("Please enter a car name");
     if (cons == null || cons <= 0) {
       return _toast("Enter a valid fuel consumption (L/100km)");
