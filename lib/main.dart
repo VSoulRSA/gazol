@@ -666,7 +666,7 @@ class _FuelScreenState extends State<FuelScreen>
                         Expanded(
                           child: TextField(
                             controller: distanceCtrl,
-                            keyboardType: TextInputType.number,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             style: const TextStyle(color: Colors.white),
                             decoration: boxInput("Distance (km)"),
                           ),
@@ -675,7 +675,7 @@ class _FuelScreenState extends State<FuelScreen>
                         Expanded(
                           child: TextField(
                             controller: fuelCtrl,
-                            keyboardType: TextInputType.number,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             style: const TextStyle(color: Colors.white),
                             decoration: boxInput("Fuel (L/100km)"),
                           ),
