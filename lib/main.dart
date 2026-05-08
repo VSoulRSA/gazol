@@ -406,7 +406,18 @@ class _FuelScreenState extends State<FuelScreen>
             await openUrl(Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$dest"));
           }),
           tripButton("Waze", () async {
-            await openUrl(Uri.parse("waze://?q=$dest&navigate=yes"));
+            final wazeUri = Uri.parse("waze://?q=$dest&navigate=yes");
+
+            if (await canLaunchUrl(wazeUri)) {
+              await launchUrl(
+                wazeUri,
+                mode: LaunchMode.externalApplication,
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Waze is not installed")),
+              );
+            }
           }),
           if (Platform.isIOS)
             tripButton("Apple Maps", () async {
@@ -736,21 +747,21 @@ class _FuelScreenState extends State<FuelScreen>
                                   "${litres!.toStringAsFixed(2)} L",
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                      fontSize: 12, fontWeight: FontWeight.bold),
+                                      fontSize: 16, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
                                   "One-way: R${oneWay!.toStringAsFixed(2)}",
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                      fontSize: 12, fontWeight: FontWeight.bold),
+                                      fontSize: 16, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
                                   "Return: R${returnCost!.toStringAsFixed(2)}",
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                      fontSize: 20, fontWeight: FontWeight.bold),
+                                      fontSize: 22, fontWeight: FontWeight.bold),
                                 ),
                               ],
                             ),
