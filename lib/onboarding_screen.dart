@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'main.dart';
+import 'fuel_pricing.dart';
+import 'http_text.dart';
 
 const _accent = Color(0xFFFF8C32);
 
@@ -20,6 +22,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   final p95Ctrl = TextEditingController();
   final p93Ctrl = TextEditingController();
   final d50Ctrl = TextEditingController();
+  final d500Ctrl = TextEditingController();
 
   final carNameCtrl = TextEditingController();
   final carConsCtrl = TextEditingController();
@@ -48,6 +51,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     p95Ctrl.dispose();
     p93Ctrl.dispose();
     d50Ctrl.dispose();
+    d500Ctrl.dispose();
     carNameCtrl.dispose();
     carConsCtrl.dispose();
     super.dispose();
@@ -93,33 +97,21 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         return;
       }
 
-      final body = response.body.toLowerCase();
-
-      String _extract(String label) {
-        final regex = RegExp("$label:\\s*r?([0-9]+\\.[0-9]+)", caseSensitive: false);
-        final match = regex.firstMatch(body);
-        return match != null ? match.group(1)! : "";
-      }
-
-      final p95 = _extract("petrol 95");
-      final p93 = _extract("petrol 93");
-      final d50 = _extract("diesel 50ppm");
-
-      if (p95.isEmpty || p93.isEmpty || d50.isEmpty) {
-        _toast("Format changed. Enter prices manually.");
-        return;
-      }
+      final prices = parseBeatForgeFuelPrices(decodeHttpResponseBody(response));
+      final inland = prices[FuelRegion.inland]!;
 
       setState(() {
-        p95Ctrl.text = p95;
-        p93Ctrl.text = p93;
-        d50Ctrl.text = d50;
+        p95Ctrl.text = inland['fuel95']!;
+        p93Ctrl.text = inland['fuel93']!;
+        d50Ctrl.text = inland['diesel50']!;
+        d500Ctrl.text = inland['diesel500']!;
       });
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString("fuel95", p95);
-      await prefs.setString("fuel93", p93);
-      await prefs.setString("diesel50", d50);
+      await saveAllRegionalFuelPrices(prefs, prices);
+      await prefs.setInt("lastFuelUpdate", DateTime.now().millisecondsSinceEpoch);
+    } on FormatException {
+      _toast("Couldn't read both regions. Enter fuel prices in Settings.");
     } catch (_) {
       _toast("Failed to fetch prices. Try again.");
     }
@@ -129,16 +121,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final p95 = double.tryParse(p95Ctrl.text.replaceAll(',', '.'),);
     final p93 = double.tryParse(p93Ctrl.text.replaceAll(',', '.'),);
     final d50 = double.tryParse(d50Ctrl.text.replaceAll(',', '.'),);
+    final d500 = double.tryParse(d500Ctrl.text.replaceAll(',', '.'),);
     if (p95 == null || p95 <= 0) return _toast("Enter a valid price for 95");
     if (p93 == null || p93 <= 0) return _toast("Enter a valid price for 93");
     if (d50 == null || d50 <= 0) {
       return _toast("Enter a valid price for Diesel 50ppm");
     }
+    if (d500 == null || d500 <= 0) {
+      return _toast("Enter a valid price for Diesel 500ppm");
+    }
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString("fuel95", p95Ctrl.text);
-    await prefs.setString("fuel93", p93Ctrl.text);
-    await prefs.setString("diesel50", d50Ctrl.text);
+    final region = parseFuelRegion(prefs.getString("fuel_region"));
+    await saveRegionFuelPrices(prefs, region, {
+      'fuel95': p95Ctrl.text,
+      'fuel93': p93Ctrl.text,
+      'diesel50': d50Ctrl.text,
+      'diesel500': d500Ctrl.text,
+    });
   }
 
   Future<void> _saveFirstCar() async {
@@ -150,10 +150,28 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
 
     final prefs = await SharedPreferences.getInstance();
+    var hasValidActiveCar = false;
+    final savedCar = prefs.getString("last_selected_car");
+    final savedCars = prefs.getString("cars");
+    if (savedCar != null && savedCar.isNotEmpty && savedCars != null) {
+      try {
+        final existingCars = json.decode(savedCars);
+        hasValidActiveCar = existingCars is List &&
+            existingCars.any(
+              (car) => car is Map && car["name"] == savedCar,
+            );
+      } catch (_) {
+        // Treat malformed saved vehicle data as no valid active selection.
+      }
+    }
+
     final list = [
       {"name": name, "consumption": cons}
     ];
     await prefs.setString("cars", json.encode(list));
+    if (!hasValidActiveCar) {
+      await prefs.setString("last_selected_car", name);
+    }
   }
 
   Future<void> _complete() async {
@@ -341,6 +359,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                             TextField(controller: p93Ctrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), style: const TextStyle(color: Colors.white), decoration: _dec("Unleaded 93 (R/L)")),
                             const SizedBox(height: 10),
                             TextField(controller: d50Ctrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), style: const TextStyle(color: Colors.white), decoration: _dec("Diesel 50ppm (R/L)")),
+                            const SizedBox(height: 10),
+                            TextField(controller: d500Ctrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), style: const TextStyle(color: Colors.white), decoration: _dec("Diesel 500ppm (R/L)")),
                             const SizedBox(height: 12),
                             const Text("Tip: You can update these anytime in Settings.", style: TextStyle(color: Colors.white54)),
                             const Spacer(),

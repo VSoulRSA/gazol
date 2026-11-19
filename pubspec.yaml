@@ -39,7 +39,7 @@ dependencies:
 
   http: ^1.2.0
 
-  google_mobile_ads: ^4.0.0
+  google_mobile_ads: ^7.0.0
 
   url_launcher: ^6.2.4
 

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'fuel_pricing.dart';
+import 'http_text.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -13,10 +15,13 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   TextEditingController petrol95Ctrl = TextEditingController();
   TextEditingController petrol93Ctrl = TextEditingController();
   TextEditingController dieselCtrl = TextEditingController();
+  TextEditingController diesel500Ctrl = TextEditingController();
+  FuelRegion selectedRegion = FuelRegion.inland;
 
   List<Map<String, dynamic>> cars = [];
 
   bool _isFetching = false;
+  bool _isCarDialogOpen = false;
 
   // animation for update button glow/scale
   late AnimationController _glowCtrl;
@@ -40,6 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     petrol95Ctrl.dispose();
     petrol93Ctrl.dispose();
     dieselCtrl.dispose();
+    diesel500Ctrl.dispose();
     _glowCtrl.dispose();
     super.dispose();
   }
@@ -82,123 +88,200 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   Future<void> editCarDialog(int index) async {
     TextEditingController nameCtrl = TextEditingController(text: cars[index]["name"]);
     TextEditingController consCtrl = TextEditingController(text: cars[index]["consumption"].toString());
+    final prefs = await SharedPreferences.getInstance();
+    final originalName = cars[index]["name"] as String?;
+    String? selectedFuelType = vehicleFuelType(cars[index]) ??
+        normalizeFuelType(prefs.getString("last_selected_fuel"));
 
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: Colors.black,
-        title: Text("Edit Car", style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: _inputDec("Car Name"),
-              style: TextStyle(color: Colors.white),
+    setState(() => _isCarDialogOpen = true);
+    try {
+      await showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          scrollable: true,
+          backgroundColor: Colors.black,
+          title: Text("Edit Car", style: TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: _inputDec("Car Name"),
+                style: TextStyle(color: Colors.white),
+              ),
+              SizedBox(height: 10),
+              TextField(
+                controller: consCtrl,
+                keyboardType: TextInputType.number,
+                decoration: _inputDec("Fuel Consumption (L/100km)"),
+                style: TextStyle(color: Colors.white),
+              ),
+              SizedBox(height: 10),
+              _fuelTypeSelector(
+                key: const ValueKey('edit-car-fuel-type'),
+                initialValue: selectedFuelType,
+                onChanged: (value) => selectedFuelType = value,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                FocusScope.of(dialogContext).unfocus();
+                Navigator.pop(dialogContext);
+              },
+              child: Text("Cancel"),
             ),
-            SizedBox(height: 10),
-            TextField(
-              controller: consCtrl,
-              keyboardType: TextInputType.number,
-              decoration: _inputDec("Fuel Consumption (L/100km)"),
-              style: TextStyle(color: Colors.white),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF8C32)),
+              onPressed: () async {
+                final name = nameCtrl.text.trim();
+                final cons = double.tryParse(consCtrl.text);
+                if (name.isEmpty || cons == null || cons <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Enter valid name and consumption")));
+                  return;
+                }
+                if (normalizeFuelType(selectedFuelType) == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Select a fuel type")));
+                  return;
+                }
+                cars[index]["name"] = name;
+                cars[index]["consumption"] = cons;
+                cars[index]["fuelType"] = selectedFuelType;
+                if (prefs.getString("last_selected_car") == originalName) {
+                  await prefs.setString("last_selected_fuel", selectedFuelType!);
+                }
+                await saveCars();
+                setState(() {});
+                FocusScope.of(dialogContext).unfocus();
+                Navigator.pop(dialogContext);
+              },
+              child: Text("Save", style: TextStyle(color: Colors.black)),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text("Cancel")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF8C32)),
-            onPressed: () async {
-              final name = nameCtrl.text.trim();
-              final cons = double.tryParse(consCtrl.text);
-              if (name.isEmpty || cons == null || cons <= 0) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Enter valid name and consumption")));
-                return;
-              }
-              cars[index] = {"name": name, "consumption": cons};
-              await saveCars();
-              setState(() {});
-              Navigator.pop(context);
-            },
-            child: Text("Save", style: TextStyle(color: Colors.black)),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      if (mounted) setState(() => _isCarDialogOpen = false);
+    }
   }
 
   Future<void> addCarDialog() async {
     TextEditingController nameCtrl = TextEditingController();
     TextEditingController consCtrl = TextEditingController();
+    final prefs = await SharedPreferences.getInstance();
+    String? selectedFuelType =
+        normalizeFuelType(prefs.getString("last_selected_fuel"));
 
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: Colors.black,
-        title: Text("Add Car", style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: _inputDec("Car Name"),
-              style: TextStyle(color: Colors.white),
+    setState(() => _isCarDialogOpen = true);
+    try {
+      await showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          scrollable: true,
+          backgroundColor: Colors.black,
+          title: Text("Add Car", style: TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: _inputDec("Car Name"),
+                style: TextStyle(color: Colors.white),
+              ),
+              SizedBox(height: 10),
+              TextField(
+                controller: consCtrl,
+                keyboardType: TextInputType.number,
+                decoration: _inputDec("Fuel Consumption (L/100km)"),
+                style: TextStyle(color: Colors.white),
+              ),
+              SizedBox(height: 10),
+              _fuelTypeSelector(
+                key: const ValueKey('add-car-fuel-type'),
+                initialValue: selectedFuelType,
+                onChanged: (value) => selectedFuelType = value,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                FocusScope.of(dialogContext).unfocus();
+                Navigator.pop(dialogContext);
+              },
+              child: Text("Cancel"),
             ),
-            SizedBox(height: 10),
-            TextField(
-              controller: consCtrl,
-              keyboardType: TextInputType.number,
-              decoration: _inputDec("Fuel Consumption (L/100km)"),
-              style: TextStyle(color: Colors.white),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF8C32)),
+              onPressed: () async {
+                final name = nameCtrl.text.trim();
+                final cons = double.tryParse(consCtrl.text);
+                if (name.isEmpty || cons == null || cons <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Enter valid name and consumption")));
+                  return;
+                }
+                if (normalizeFuelType(selectedFuelType) == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Select a fuel type")));
+                  return;
+                }
+                cars.add({
+                  "name": name,
+                  "consumption": cons,
+                  "fuelType": selectedFuelType,
+                });
+                await saveCars();
+                setState(() {});
+                FocusScope.of(dialogContext).unfocus();
+                Navigator.pop(dialogContext);
+              },
+              child: Text("Save", style: TextStyle(color: Colors.black)),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text("Cancel")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFFFF8C32)),
-            onPressed: () async {
-              final name = nameCtrl.text.trim();
-              final cons = double.tryParse(consCtrl.text);
-              if (name.isEmpty || cons == null || cons <= 0) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Enter valid name and consumption")));
-                return;
-              }
-              cars.add({"name": name, "consumption": cons});
-              await saveCars();
-              setState(() {});
-              Navigator.pop(context);
-            },
-            child: Text("Save", style: TextStyle(color: Colors.black)),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      if (mounted) setState(() => _isCarDialogOpen = false);
+    }
   }
 
   Future<void> loadFuelPrices() async {
     final prefs = await SharedPreferences.getInstance();
-    petrol95Ctrl.text = prefs.getString("fuel95") ?? "";
-    petrol93Ctrl.text = prefs.getString("fuel93") ?? "";
-    dieselCtrl.text = prefs.getString("diesel50") ?? "";
+    selectedRegion = parseFuelRegion(prefs.getString("fuel_region"));
+    petrol95Ctrl.text = storedFuelPrice(prefs, selectedRegion, "fuel95");
+    petrol93Ctrl.text = storedFuelPrice(prefs, selectedRegion, "fuel93");
+    dieselCtrl.text = storedFuelPrice(prefs, selectedRegion, "diesel50");
+    diesel500Ctrl.text = storedFuelPrice(prefs, selectedRegion, "diesel500");
+    if (mounted) setState(() {});
   }
 
   Future<void> saveFuelPrices() async {
     // basic validation: ensure numbers
     if (!_isValidPrice(petrol95Ctrl.text) ||
         !_isValidPrice(petrol93Ctrl.text) ||
-        !_isValidPrice(dieselCtrl.text)) {
+        !_isValidPrice(dieselCtrl.text) ||
+        !_isValidPrice(diesel500Ctrl.text)) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Please enter valid numeric prices")));
       return;
     }
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString("fuel95", petrol95Ctrl.text);
-    await prefs.setString("fuel93", petrol93Ctrl.text);
-    await prefs.setString("diesel50", dieselCtrl.text);
+    await saveRegionFuelPrices(prefs, selectedRegion, {
+      "fuel95": petrol95Ctrl.text,
+      "fuel93": petrol93Ctrl.text,
+      "diesel50": dieselCtrl.text,
+      "diesel500": diesel500Ctrl.text,
+    });
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ Fuel prices saved")));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Fuel prices saved")));
+  }
+
+  Future<void> _selectRegion(FuelRegion region) async {
+    if (region == selectedRegion) return;
+    final prefs = await SharedPreferences.getInstance();
+    await saveFuelRegion(prefs, region);
+    setState(() => selectedRegion = region);
+    await loadFuelPrices();
   }
 
   bool _isValidPrice(String s) {
@@ -216,39 +299,32 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       final response = await http.get(url);
       if (response.statusCode != 200) throw Exception("Failed to load");
 
-      final body = response.body;
-
-      final reg95 = RegExp(r"95:\s*R([0-9.]+)", caseSensitive: false);
-      final reg93 = RegExp(r"93:\s*R([0-9.]+)", caseSensitive: false);
-      final regDiesel = RegExp(r"Diesel.*?:\s*R([0-9.]+)", caseSensitive: false);
-
-      final p95 = reg95.firstMatch(body)?.group(1);
-      final p93 = reg93.firstMatch(body)?.group(1);
-      final d50 = regDiesel.firstMatch(body)?.group(1);
-
-      if (p95 == null || p93 == null || d50 == null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("⚠️ Could not read prices – check Beatforge format")));
-        return;
-      }
-
-      petrol95Ctrl.text = p95;
-      petrol93Ctrl.text = p93;
-      dieselCtrl.text = d50;
-
+      final prices = parseBeatForgeFuelPrices(decodeHttpResponseBody(response));
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString("fuel95", p95);
-      await prefs.setString("fuel93", p93);
-      await prefs.setString("diesel50", d50);
+      await saveAllRegionalFuelPrices(prefs, prices);
       await prefs.setInt("lastFuelUpdate", DateTime.now().millisecondsSinceEpoch);
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("✅ Fuel prices updated from Beatforge")));
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ Internet error — try again")));
+      final selectedPrices = prices[selectedRegion]!;
+      petrol95Ctrl.text = selectedPrices["fuel95"]!;
+      petrol93Ctrl.text = selectedPrices["fuel93"]!;
+      dieselCtrl.text = selectedPrices["diesel50"]!;
+      diesel500Ctrl.text = selectedPrices["diesel500"]!;
+      if (mounted) setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Fuel prices updated from BeatForge")),
+      );
+    } on FormatException {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Could not read all eight prices from BeatForge")),
+      );
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Internet error - try again")),
+      );
     } finally {
       if (mounted) setState(() => _isFetching = false);
     }
   }
-
   Future<void> autoUpdateWeekly() async {
     final prefs = await SharedPreferences.getInstance();
     final last = prefs.getInt("lastFuelUpdate") ?? 0;
@@ -270,6 +346,36 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     }
   }
 
+  Widget _regionButton(FuelRegion region, String label) {
+    final isSelected = selectedRegion == region;
+    return Expanded(
+      child: InkWell(
+        key: ValueKey('fuel-region-${region.name}'),
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => _selectRegion(region),
+        child: AnimatedContainer(
+          duration: Duration(milliseconds: 160),
+          alignment: Alignment.center,
+          padding: EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? Color(0xFFFF8C32) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? Color(0xFFFF8C32) : Color(0xFF3A3A3A),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.black : Colors.white70,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   InputDecoration _inputDec(String label) => InputDecoration(
     labelText: label,
     labelStyle: TextStyle(color: Colors.white54),
@@ -281,11 +387,42 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
   );
 
+  Widget _fuelTypeSelector({
+    required Key key,
+    required String? initialValue,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      key: key,
+      initialValue: initialValue,
+      isExpanded: true,
+      menuMaxHeight: 260,
+      dropdownColor: const Color(0xFF1E1E1E),
+      iconEnabledColor: Colors.white70,
+      style: const TextStyle(color: Colors.white),
+      decoration: _inputDec("Fuel Type").copyWith(
+        hintText: "Select fuel type",
+        filled: true,
+        fillColor: const Color(0xFF111111),
+      ),
+      items: fuelTypeLabels.entries
+          .map(
+            (entry) => DropdownMenuItem<String>(
+              value: entry.key,
+              child: Text(entry.value, style: const TextStyle(color: Colors.white)),
+            ),
+          )
+          .toList(growable: false),
+      onChanged: onChanged,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(backgroundColor: Colors.black, title: Text("Settings")),
+      resizeToAvoidBottomInset: !_isCarDialogOpen,
 
       floatingActionButton: FloatingActionButton(
         backgroundColor: Color(0xFFFF8C32),
@@ -336,6 +473,24 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
             SizedBox(height: 12),
 
+            Row(
+              children: [
+                Text("Fuel Region", style: TextStyle(color: Colors.white70)),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Row(
+                    children: [
+                      _regionButton(FuelRegion.inland, "Inland"),
+                      SizedBox(width: 8),
+                      _regionButton(FuelRegion.coastal, "Coastal"),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            SizedBox(height: 6),
+
             // CENTERED UPDATE BUTTON with subtle scale/glow animation
             Center(
               child: ScaleTransition(
@@ -365,14 +520,19 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
             SizedBox(height: 16),
 
-            Text("Manual Fuel Prices", style: TextStyle(color: Colors.white70)),
+            Text(
+              "Manual ${selectedRegion == FuelRegion.inland ? 'Inland' : 'Coastal'} Fuel Prices",
+              style: TextStyle(color: Colors.white70),
+            ),
             SizedBox(height: 8),
 
-            TextField(controller: petrol95Ctrl, decoration: _inputDec("Unleaded 95 (R/L)"), keyboardType: TextInputType.number, style: TextStyle(color: Colors.white)),
-            SizedBox(height: 8),
-            TextField(controller: petrol93Ctrl, decoration: _inputDec("Unleaded 93 (R/L)"), keyboardType: TextInputType.number, style: TextStyle(color: Colors.white)),
-            SizedBox(height: 8),
-            TextField(controller: dieselCtrl, decoration: _inputDec("Diesel 50ppm (R/L)"), keyboardType: TextInputType.number, style: TextStyle(color: Colors.white)),
+            TextField(controller: petrol95Ctrl, decoration: _inputDec("Unleaded 95 (R/L)").copyWith(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)), keyboardType: TextInputType.number, style: TextStyle(color: Colors.white)),
+            SizedBox(height: 6),
+            TextField(controller: petrol93Ctrl, decoration: _inputDec("Unleaded 93 (R/L)").copyWith(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)), keyboardType: TextInputType.number, style: TextStyle(color: Colors.white)),
+            SizedBox(height: 6),
+            TextField(controller: dieselCtrl, decoration: _inputDec("Diesel 50ppm (R/L)").copyWith(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)), keyboardType: TextInputType.number, style: TextStyle(color: Colors.white)),
+            SizedBox(height: 6),
+            TextField(controller: diesel500Ctrl, decoration: _inputDec("Diesel 500ppm (R/L)").copyWith(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)), keyboardType: TextInputType.number, style: TextStyle(color: Colors.white)),
             SizedBox(height: 8),
 
             Center(

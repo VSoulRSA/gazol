@@ -1,3 +1,6 @@
+import com.android.build.api.dsl.LibraryExtension
+import com.android.build.api.variant.AndroidComponentsExtension
+
 allprojects {
     repositories {
         google()
@@ -15,6 +18,17 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+
+subprojects {
+    plugins.withId("com.android.library") {
+        extensions.configure<AndroidComponentsExtension<LibraryExtension, *, *>>("androidComponents") {
+            finalizeDsl { androidDsl ->
+                androidDsl.compileSdk = 36
+            }
+        }
+    }
+}
+
 subprojects {
     project.evaluationDependsOn(":app")
 }

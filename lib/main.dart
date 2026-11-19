@@ -1,7 +1,7 @@
-// ✅IMPORTS — DO NOT CHANGE
+// App imports.
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -13,6 +13,9 @@ import 'splash_screen.dart';
 import 'secrets.dart';
 import 'settings_screen.dart';
 import 'onboarding_screen.dart';
+import 'fuel_pricing.dart';
+import 'location_support.dart';
+import 'http_text.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,12 +35,12 @@ class GazolApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.transparent,
         primaryColor: const Color(0xFFFF8C32),
       ),
-      home: const LaunchGate(), // ✅ Decide onboarding or app
+      home: const LaunchGate(), // Select onboarding or the main app
     );
   }
 }
 
-/// ✅ Decides whether onboarding or splash → FuelScreen
+/// Chooses onboarding or the calculator screen.
 class LaunchGate extends StatelessWidget {
   const LaunchGate({super.key});
 
@@ -69,17 +72,17 @@ class LaunchGate extends StatelessWidget {
           );
         }
 
-        // ✅ If user still has no car or first launch → onboarding
+        // Show onboarding if this is a first launch or no vehicle exists.
         if (snapshot.data == true) return const OnboardingScreen();
 
-        // ✅ Else → normal splash/app
+        // Otherwise, continue through the splash screen.
         return SplashScreen();
       },
     );
   }
 }
 
-// ✅ BACKGROUND PATTERN — unchanged
+// Background pattern.
 class GazolWallpaper extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -108,7 +111,7 @@ class GazolWallpaper extends CustomPainter {
 }
 
 
-// FuelScreen CODE —
+// FuelScreen.
 
 class FuelScreen extends StatefulWidget {
   @override
@@ -125,6 +128,10 @@ class _FuelScreenState extends State<FuelScreen>
   List<Map<String, dynamic>> cars = [];
   String? selectedCar;
   String? selectedFuel;
+  FuelRegion selectedRegion = FuelRegion.inland;
+  bool _isShowingFirstFuelPrompt = false;
+  bool _isFetchingDistance = false;
+  bool _hasValidTripDistance = false;
 
   // current coordinates for map use
   double? currentLat;
@@ -161,44 +168,99 @@ class _FuelScreenState extends State<FuelScreen>
     cars = saved != null
         ? List<Map<String, dynamic>>.from(json.decode(saved))
         : [];
+    selectedRegion = parseFuelRegion(prefs.getString("fuel_region"));
 
-    // restore selections
     final savedCar = prefs.getString("last_selected_car");
     final savedFuel = prefs.getString("last_selected_fuel");
+    if (migrateLegacyVehicleFuelTypes(cars, savedFuel)) {
+      await prefs.setString("cars", json.encode(cars));
+    }
 
-    // only restore the car if it exists in the current list
-    if (savedCar != null && savedCar.isNotEmpty) {
-      final exists = cars.any((c) => c["name"] == savedCar);
-      if (exists) {
-        selectedCar = savedCar;
-        // set fuel consumption from the saved car
-        final car = cars.firstWhere((c) => c["name"] == savedCar);
-        fuelCtrl.text = car["consumption"].toString();
-      } else {
-        // saved car not found — clear it
-        selectedCar = null;
-        await prefs.remove("last_selected_car");
-      }
+    if (savedCar != null && savedCar.isNotEmpty &&
+        cars.any((car) => car["name"] == savedCar)) {
+      selectedCar = savedCar;
+      final car = cars.firstWhere((item) => item["name"] == savedCar);
+      fuelCtrl.text = car["consumption"].toString();
     } else {
       selectedCar = null;
+      if (savedCar != null) await prefs.remove("last_selected_car");
     }
 
-    // restore fuel selection if the key price exists
-    if (savedFuel != null && savedFuel.isNotEmpty) {
-      final price = prefs.getString(savedFuel) ?? "";
-      if (price.isNotEmpty) {
-        selectedFuel = savedFuel;
-        priceCtrl.text = price;
-      } else {
-        // saved fuel type no longer has a price — clear it
-        selectedFuel = null;
-        await prefs.remove("last_selected_fuel");
-      }
-    } else {
-      selectedFuel = null;
-    }
+    final activeCars = cars.where((car) => car["name"] == selectedCar);
+    selectedFuel = activeCars.isNotEmpty
+        ? vehicleFuelType(activeCars.first) ?? normalizeFuelType(savedFuel)
+        : normalizeFuelType(savedFuel);
+    priceCtrl.text = selectedFuel == null
+        ? ""
+        : storedFuelPrice(prefs, selectedRegion, selectedFuel!);
 
+    if (!mounted) return;
     setState(() {});
+    if (selectedFuel == null) await _showFirstFuelPrompt();
+  }
+
+  Future<void> _showFirstFuelPrompt() async {
+    if (!mounted || selectedFuel != null || _isShowingFirstFuelPrompt) return;
+
+    _isShowingFirstFuelPrompt = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => PopScope(
+          canPop: false,
+          child: AlertDialog(
+            backgroundColor: const Color(0xFF1E1E1E),
+            title: const Text(
+              "Choose your fuel type",
+              style: TextStyle(color: Colors.white),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  "Select the fuel type to use in the calculator. You can change it anytime.",
+                  style: TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 8),
+                _firstFuelChoice(dialogContext, "Petrol 93", "fuel93"),
+                _firstFuelChoice(dialogContext, "Petrol 95", "fuel95"),
+                _firstFuelChoice(dialogContext, "Diesel 50ppm", "diesel50"),
+                _firstFuelChoice(dialogContext, "Diesel 500ppm", "diesel500"),
+              ],
+            ),
+          ),
+        ),
+      );
+    } finally {
+      _isShowingFirstFuelPrompt = false;
+    }
+  }
+
+  Widget _firstFuelChoice(
+    BuildContext dialogContext,
+    String label,
+    String fuelKey,
+  ) {
+    return TextButton(
+      onPressed: () async {
+        final prefs = await SharedPreferences.getInstance();
+        if (!mounted) return;
+        final price = storedFuelPrice(prefs, selectedRegion, fuelKey);
+
+        setState(() {
+          selectedFuel = fuelKey;
+          priceCtrl.text = price;
+        });
+        await _saveSelectedFuel(fuelKey);
+        _recalculateForSelectedVehicleIfReady();
+        if (dialogContext.mounted) {
+          Navigator.of(dialogContext).pop();
+        }
+      },
+      child: Text(label, style: const TextStyle(color: Color(0xFFFF8C32))),
+    );
   }
 
   // helper: persist chosen car name
@@ -214,66 +276,114 @@ class _FuelScreenState extends State<FuelScreen>
   // helper: persist chosen fuel key
   Future<void> _saveSelectedFuel(String? fuelKey) async {
     final prefs = await SharedPreferences.getInstance();
-    if (fuelKey == null) {
-      await prefs.remove("last_selected_fuel");
-    } else {
-      await prefs.setString("last_selected_fuel", fuelKey);
-    }
+    await persistActiveVehicleFuelType(prefs, cars, selectedCar, fuelKey);
   }
 
   // LOCATION (stores coordinates)
   Future<void> getLocation() async {
-    if (!await Geolocator.isLocationServiceEnabled()) {
-      setState(() => locationText = "GPS Off");
+    final result = await lookupCurrentPositionSafely(
+      isServiceEnabled: Geolocator.isLocationServiceEnabled,
+      checkPermission: Geolocator.checkPermission,
+      requestPermission: Geolocator.requestPermission,
+      getCurrentPosition: Geolocator.getCurrentPosition,
+    );
+    final position = result.position;
+    if (position == null) {
+      if (mounted) {
+        setState(() => locationText = result.serviceEnabled == false
+            ? "GPS Off"
+            : "Location unavailable");
+      }
       return;
     }
 
-    var perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-    if (perm == LocationPermission.denied) return;
-
-    final pos = await Geolocator.getCurrentPosition();
-    currentLat = pos.latitude;
-    currentLng = pos.longitude;
-
-    final place =
-        (await placemarkFromCoordinates(pos.latitude, pos.longitude)).first;
-
-    final parts = [
-      place.locality,
-      place.administrativeArea,
-      place.country
-    ].where((e) => e != null && e.trim().isNotEmpty).map((e) => e!).toList();
-
-    setState(() => locationText = parts.join(", "));
+    currentLat = position.latitude;
+    currentLng = position.longitude;
+    try {
+      final places = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      final place = places.isEmpty ? null : places.first;
+      final parts = [
+        place?.locality,
+        place?.administrativeArea,
+        place?.country,
+      ].where((value) => value != null && value.trim().isNotEmpty)
+          .map((value) => value!)
+          .toList();
+      if (mounted) {
+        setState(() => locationText = parts.isEmpty
+            ? "Location unavailable"
+            : parts.join(", "));
+      }
+    } catch (_) {
+      if (mounted) setState(() => locationText = "Location unavailable");
+    }
   }
 
-  // ✅ GOOGLE DISTANCE
   Future<void> fetchDistance() async {
-    if (destinationCtrl.text.isEmpty) return;
+    if (_isFetchingDistance || destinationCtrl.text.trim().isEmpty) return;
 
-    final url =
-        "https://maps.googleapis.com/maps/api/distancematrix/json?origins=$locationText&destinations=${destinationCtrl.text}&mode=driving&key=$googleApiKey";
-
-    final res = await http.get(Uri.parse(url));
-    final data = json.decode(res.body);
-
+    _isFetchingDistance = true;
+    _hasValidTripDistance = false;
+    // Hide any prior estimate while this destination is being verified.
+    setState(() {
+      litres = null;
+      oneWay = null;
+      returnCost = null;
+    });
     try {
+      final uri = Uri.https(
+        "maps.googleapis.com",
+        "/maps/api/distancematrix/json",
+        {
+          "origins": locationText,
+          "destinations": destinationCtrl.text.trim(),
+          "mode": "driving",
+          "key": googleApiKey,
+        },
+      );
+
+      final res = await http.get(uri);
+      if (res.statusCode != 200) {
+        throw const FormatException("Distance lookup failed");
+      }
+      final data = json.decode(decodeHttpResponseBody(res));
+      if (!mounted) return;
+      if (data["status"] != "OK") {
+        throw const FormatException("Distance lookup failed");
+      }
+
       final element = data["rows"][0]["elements"][0];
       if (element["status"] != "OK") {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text("Destination not found. Please enter a valid location.")),
+            content: Text(
+              "Destination not found. Please enter a valid location.",
+            ),
+          ),
         );
         return;
       }
 
       final meters = element["distance"]["value"];
-      setState(() => distanceCtrl.text = (meters / 1000).toStringAsFixed(1));
+      if (meters is! num || !meters.isFinite || meters <= 0) {
+        throw const FormatException("Invalid distance");
+      }
+
+      if (!mounted) return;
+      distanceCtrl.text = (meters / 1000).toStringAsFixed(1);
+      calculate();
     } catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Could not verify destination. Try again.")),
+        const SnackBar(
+          content: Text("Could not verify destination. Try again."),
+        ),
       );
+    } finally {
+      _isFetchingDistance = false;
     }
   }
 
@@ -322,7 +432,7 @@ class _FuelScreenState extends State<FuelScreen>
       return;
     }
 
-    // No destination provided — just center map on current coords
+    // No destination was provided; center the map on current coordinates.
     // Try geo: scheme (Android) or Google Maps app
     final geoUri = Uri.parse("geo:$lat,$lng?q=$lat,$lng");
     if (await canLaunchUrl(geoUri)) {
@@ -341,35 +451,51 @@ class _FuelScreenState extends State<FuelScreen>
     );
   }
 
-  // ✅ CALC
-  void calculate() {
+  // Calculator calculations.
+  void calculate({bool showValidationErrors = true}) {
     final d = double.tryParse(distanceCtrl.text.replaceAll(',', '.'),);
     final f = double.tryParse(fuelCtrl.text.replaceAll(',', '.'),);
     final p = double.tryParse(priceCtrl.text.replaceAll(',', '.'),);
+    _hasValidTripDistance = d != null && d.isFinite && d > 0;
 
-    if (d == null || d <= 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Please enter a valid distance (km)")));
-      return;
-    }
-    if (f == null || f <= 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Please enter a valid fuel consumption")));
-      return;
-    }
-    if (p == null || p <= 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Please select a fuel type & set prices")));
-      return;
+    String? validationMessage;
+    if (!_hasValidTripDistance) {
+      validationMessage = "Please enter a valid distance (km)";
+    } else if (f == null || !f.isFinite || f <= 0) {
+      validationMessage = "Please enter a valid fuel consumption";
+    } else if (p == null || !p.isFinite || p <= 0) {
+      validationMessage = "Please select a fuel type & set prices";
     }
 
-    litres = (d / 100) * f;
-    oneWay = litres! * p;
+    if (validationMessage != null) {
+      _clearTripEstimate();
+      if (showValidationErrors) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(validationMessage)));
+      }
+      return;
+    }
+
+    litres = (d! / 100) * f!;
+    oneWay = litres! * p!;
     returnCost = oneWay! * 2;
     setState(() {});
   }
 
-  // ✅ Trip launcher
+  void _clearTripEstimate() {
+    litres = null;
+    oneWay = null;
+    returnCost = null;
+    if (mounted) setState(() {});
+  }
+
+  void _recalculateForSelectedVehicleIfReady() {
+    if (_hasValidTripDistance) {
+      calculate(showValidationErrors: false);
+    }
+  }
+
+  // Trip launcher.
   Future<void> startTrip() async {
     if (destinationCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context)
@@ -419,7 +545,7 @@ class _FuelScreenState extends State<FuelScreen>
               );
             }
           }),
-          if (Platform.isIOS)
+          if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS)
             tripButton("Apple Maps", () async {
               await openUrl(Uri.parse("http://maps.apple.com/?daddr=$dest"));
             }),
@@ -433,7 +559,7 @@ class _FuelScreenState extends State<FuelScreen>
     );
   }
 
-  // ✅ nice buttons
+  // Action buttons.
   Widget tripButton(String title, VoidCallback action) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -466,13 +592,14 @@ class _FuelScreenState extends State<FuelScreen>
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
   );
 
-  // ✅ Fuel Chip
+  // Fuel selection chip.
   Widget fuelChip(String label, String key) {
     final bool isSelected = selectedFuel == key;
     return GestureDetector(
       onTap: () async {
         final prefs = await SharedPreferences.getInstance();
-        final price = prefs.getString(key) ?? "";
+        if (!mounted) return;
+        final price = storedFuelPrice(prefs, selectedRegion, key);
         if (price.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Please enter fuel prices in Settings first")),
@@ -483,7 +610,6 @@ class _FuelScreenState extends State<FuelScreen>
           selectedFuel = key;
           priceCtrl.text = price;
         });
-        // persist fuel selection
         await _saveSelectedFuel(key);
       },
       child: Container(
@@ -635,12 +761,25 @@ class _FuelScreenState extends State<FuelScreen>
                         final sel = selectedCar == car["name"];
                         return GestureDetector(
                           onTap: () async {
+                            final prefs = await SharedPreferences.getInstance();
+                            if (!mounted) return;
+                            final nextFuel = vehicleFuelType(car);
                             setState(() {
                               selectedCar = car["name"];
-                              fuelCtrl.text = car["consumption"].toString();
+                              fuelCtrl.text = car["consumption"]?.toString() ?? "";
+                              selectedFuel = nextFuel;
+                              priceCtrl.text = nextFuel == null
+                                  ? ""
+                                  : storedFuelPrice(prefs, selectedRegion, nextFuel);
                             });
-                            // persist selected car
+                            _recalculateForSelectedVehicleIfReady();
                             await _saveSelectedCar(selectedCar);
+                            if (nextFuel == null) {
+                              await _saveSelectedFuel(null);
+                              await _showFirstFuelPrompt();
+                            } else {
+                              await _saveSelectedFuel(nextFuel);
+                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -692,9 +831,10 @@ class _FuelScreenState extends State<FuelScreen>
                     Wrap(
                       spacing: 8,
                       children: [
-                        fuelChip("95", "fuel95"),
-                        fuelChip("93", "fuel93"),
-                        fuelChip("Diesel", "diesel50"),
+                        fuelChip("Petrol 95", "fuel95"),
+                        fuelChip("Petrol 93", "fuel93"),
+                        fuelChip("Diesel 50ppm", "diesel50"),
+                        fuelChip("Diesel 500ppm", "diesel500"),
                       ],
                     ),
 
